@@ -1,0 +1,189 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* LumenOS — Smart Light Control
+   Light theme with clean GREEN accent system.
+   All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Clean white background */
+    --background: 0 0% 99%;
+    --foreground: 160 20% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 160 20% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 160 20% 15%;
+
+    /* Clean green primary */
+    --primary: 142 70% 45%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 142 80% 50%;
+
+    /* Soft mint secondary */
+    --secondary: 142 50% 94%;
+    --secondary-foreground: 142 70% 25%;
+
+    --muted: 160 10% 95%;
+    --muted-foreground: 160 10% 45%;
+
+    /* Bright lime accent */
+    --accent: 142 60% 90%;
+    --accent-foreground: 142 80% 25%;
+
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --warning: 38 95% 55%;
+
+    --border: 160 10% 90%;
+    --input: 160 10% 90%;
+    --ring: 142 70% 45%;
+
+    --radius: 1rem;
+
+    /* Light bulb states */
+    --bulb-on: 48 100% 50%;
+    --bulb-glow: 48 100% 50%;
+    --bulb-off: 160 10% 85%;
+
+    /* Surfaces */
+    --surface-1: 0 0% 100%;
+    --surface-2: 160 5% 97%;
+    --surface-3: 160 5% 94%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(142 70% 45%), hsl(100 80% 40%));
+    --gradient-bulb: radial-gradient(circle at 50% 40%, hsl(55 100% 70%), hsl(48 100% 50%) 55%, hsl(40 100% 45%) 100%);
+    --gradient-bulb-off: radial-gradient(circle at 50% 40%, hsl(160 10% 95%), hsl(160 10% 88%) 70%, hsl(160 15% 80%) 100%);
+    --gradient-bg: radial-gradient(ellipse at top, hsl(0 0% 100%), hsl(160 10% 94%) 80%);
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(160 10% 97%));
+
+    /* Glows */
+    --glow-primary: 0 0 20px hsl(142 70% 45% / 0.15);
+    --glow-bulb: none;
+    --glow-soft: 0 0 15px hsl(142 70% 45% / 0.1);
+    --glow-accent: 0 0 20px hsl(142 60% 90% / 0.4);
+
+    /* Shadows */
+    --shadow-card: 0 8px 30px hsla(160, 20%, 15%, 0.05), 0 2px 10px hsla(160, 20%, 15%, 0.02);
+    --shadow-elevated: 0 20px 40px hsla(160, 20%, 15%, 0.1);
+
+    /* Transitions */
+    --transition-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    --sidebar-background: 0 0% 99%;
+    --sidebar-foreground: 160 20% 15%;
+    --sidebar-primary: 142 70% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 160 10% 95%;
+    --sidebar-accent-foreground: 160 20% 15%;
+    --sidebar-border: 160 10% 90%;
+    --sidebar-ring: 142 70% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background: var(--gradient-bg);
+    background-attachment: fixed;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Subtle grid overlay */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(hsl(142 70% 45% / 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(142 70% 45% / 0.08) 1px, transparent 1px);
+    background-size: 64px 64px;
+    pointer-events: none;
+    z-index: 0;
+    mask-image: radial-gradient(ellipse at center, black 10%, transparent 80%);
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: var(--gradient-card);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid hsl(var(--border) / 0.5);
+    box-shadow: var(--shadow-card);
+  }
+
+  .neon-text {
+    text-shadow: 0 0 10px hsl(var(--primary) / 0.2), 0 0 20px hsl(var(--primary) / 0.1);
+  }
+
+  .text-gradient {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .bulb-glow-on {
+    background: var(--gradient-bulb);
+    box-shadow: var(--glow-bulb);
+  }
+
+  .bulb-glow-off {
+    background: var(--gradient-bulb-off);
+    box-shadow: inset 0 4px 16px hsla(160, 20%, 15%, 0.1);
+  }
+}
+
+@layer utilities {
+  .animate-pulse-glow {
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+  .animate-flicker {
+    animation: flicker 4s ease-in-out infinite;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: none;
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow: none;
+    filter: brightness(1.05);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  47% { opacity: 1; }
+  48% { opacity: 0.88; }
+  49% { opacity: 1; }
+  72% { opacity: 1; }
+  73% { opacity: 0.94; }
+  74% { opacity: 1; }
+}

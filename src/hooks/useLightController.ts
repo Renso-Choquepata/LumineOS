@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import mqtt from "mqtt";
 
 export type LightEvent = {
   id: string;
@@ -15,9 +16,9 @@ export type Settings = {
   monthlyBudget: number; // currency
 };
 
-const EVENTS_KEY = "lumenos.events.v2";
-const SETTINGS_KEY = "lumenos.settings.v2";
-const STATE_KEY = "lumenos.state.v2";
+const EVENTS_KEY = "lumenos.events.v6";
+const SETTINGS_KEY = "lumenos.settings.v6";
+const STATE_KEY = "lumenos.state.v6";
 
 const defaultSettings: Settings = {
   wattage: 60,
@@ -32,26 +33,7 @@ function loadEvents(): LightEvent[] {
     const raw = localStorage.getItem(EVENTS_KEY);
     if (raw) return JSON.parse(raw);
   } catch {}
-  // Seed with simulated history (last 30 days)
-  const seed: LightEvent[] = [];
-  const now = Date.now();
-  for (let day = 30; day >= 1; day--) {
-    const sessions = 1 + Math.floor(Math.random() * 3);
-    for (let s = 0; s < sessions; s++) {
-      const dayStart = now - day * 86400000;
-      const startHour = 17 + Math.random() * 5;
-      const onAt = dayStart + startHour * 3600000;
-      const durationMin = 20 + Math.random() * 180;
-      const offAt = onAt + durationMin * 60000;
-      seed.push({
-        id: `seed-${day}-${s}`,
-        onAt,
-        offAt,
-        brightness: 70 + Math.floor(Math.random() * 30),
-      });
-    }
-  }
-  return seed.sort((a, b) => a.onAt - b.onAt);
+  return [];
 }
 
 function loadSettings(): Settings {
@@ -63,15 +45,62 @@ function loadSettings(): Settings {
 }
 
 function loadState(): boolean {
-  try {
-    return localStorage.getItem(STATE_KEY) === "on";
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 export function useLightController() {
   const [events, setEvents] = useState<LightEvent[]>(() => loadEvents());
+  const mqttClient = useRef<mqtt.MqttClient | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+
+  // Forzar limpieza completa en caso de que React guarde el estado en memoria por HMR
+  useEffect(() => {
+    setIsOn(false);
+    setEvents([]);
+  }, []);
+
+  // Inicializar conexión MQTT
+  useEffect(() => {
+    // Usamos WebSockets (wss://) porque la página está en Vercel (HTTPS)
+    const client = mqtt.connect("wss://broker.emqx.io:8084/mqtt");
+    mqttClient.current = client;
+
+    client.on("connect", () => {
+      console.log("Conectado al broker MQTT (LuminaOS Web)");
+      // Nos suscribimos al topic de estado para saber si el Arduino realmente está conectado
+      client.subscribe("luminaos/esp32_foco/status");
+    });
+
+    client.on("message", (topic, payload) => {
+      if (topic === "luminaos/esp32_foco/status") {
+        const status = payload.toString();
+        if (status === "online") {
+          setIsConnected(true);
+        } else if (status === "offline") {
+          setIsConnected(false);
+        }
+      }
+    });
+
+    client.on("close", () => {
+      setIsConnected(false);
+    });
+
+    client.on("offline", () => {
+      setIsConnected(false);
+    });
+
+    client.on("error", (err) => {
+      console.error("Error de conexión MQTT:", err);
+      setIsConnected(false);
+    });
+
+    return () => {
+      if (client) {
+        client.end();
+      }
+    };
+  }, []);
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [isOn, setIsOn] = useState<boolean>(() => loadState());
   const [currentSessionStart, setCurrentSessionStart] = useState<number | null>(
@@ -114,9 +143,16 @@ export function useLightController() {
       clearTimeout(autoOffTimer.current);
       autoOffTimer.current = null;
     }
+    
+    // Publicar mensaje MQTT
+    if (mqttClient.current) {
+      mqttClient.current.publish("luminaos/esp32_foco/control", "OFF");
+      console.log("MQTT: Enviado OFF");
+    }
   };
 
   const turnOn = () => {
+    if (!isConnected) return;
     const now = Date.now();
     const newEvent: LightEvent = {
       id: `evt-${now}`,
@@ -127,9 +163,16 @@ export function useLightController() {
     setEvents((prev) => [...prev, newEvent]);
     setCurrentSessionStart(now);
     setIsOn(true);
+
+    // Publicar mensaje MQTT
+    if (mqttClient.current) {
+      mqttClient.current.publish("luminaos/esp32_foco/control", "ON");
+      console.log("MQTT: Enviado ON");
+    }
   };
 
   const toggle = () => {
+    if (!isConnected) return;
     if (isOn) turnOff();
     else turnOn();
   };
@@ -175,6 +218,8 @@ export function useLightController() {
     setSettings,
     currentSessionStart,
     clearHistory,
+    isConnected,
+    setIsOn,
   };
 }
 

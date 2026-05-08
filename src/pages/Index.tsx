@@ -11,9 +11,6 @@ import { StatCard } from "@/components/StatCard";
 import { UsageChart } from "@/components/UsageChart";
 import { HistoryTimeline } from "@/components/HistoryTimeline";
 import { SettingsPanel } from "@/components/SettingsPanel";
-import { BrightnessSlider } from "@/components/BrightnessSlider";
-import { BudgetAlert } from "@/components/BudgetAlert";
-import { QuickActions } from "@/components/QuickActions";
 import {
   Activity,
   Clock,
@@ -36,6 +33,7 @@ const Index = () => {
     setSettings,
     currentSessionStart,
     clearHistory,
+    isConnected,
   } = useLightController();
   const [, setTick] = useState(0);
 
@@ -48,56 +46,33 @@ const Index = () => {
 
   const stats = useMemo(() => {
     const now = Date.now();
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const yesterdayStart = todayStart.getTime() - 86400000;
+    
+    // Semanal (Inicia lunes)
+    const weekStart = new Date();
+    const dayOfWeek = weekStart.getDay() || 7;
+    weekStart.setDate(weekStart.getDate() - dayOfWeek + 1);
+    weekStart.setHours(0, 0, 0, 0);
+
+    // Mensual
     const monthStart = new Date();
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
 
-    const todayMs = totalActiveMs(events, todayStart.getTime(), now);
-    const yesterdayMs = totalActiveMs(events, yesterdayStart, todayStart.getTime());
+    // Anual
+    const yearStart = new Date();
+    yearStart.setMonth(0, 1);
+    yearStart.setHours(0, 0, 0, 0);
+
+    const weekMs = totalActiveMs(events, weekStart.getTime(), now);
     const monthMs = totalActiveMs(events, monthStart.getTime(), now);
-    const totalMs = totalActiveMs(events);
-
-    const todayKwh = totalKwh(events, settings.wattage, todayStart.getTime(), now);
-    const monthKwh = totalKwh(events, settings.wattage, monthStart.getTime(), now);
-    const totalKwhAll = totalKwh(events, settings.wattage);
-
-    const todayCost = todayKwh * settings.pricePerKwh;
-    const monthCost = monthKwh * settings.pricePerKwh;
-
-    // Project month cost based on current rate
-    const dayOfMonth = new Date().getDate();
-    const daysInMonth = new Date(
-      new Date().getFullYear(),
-      new Date().getMonth() + 1,
-      0
-    ).getDate();
-    const projectedMonthCost = (monthCost / Math.max(1, dayOfMonth)) * daysInMonth;
-
-    const trendVsYesterday =
-      yesterdayMs > 0
-        ? (((todayMs - yesterdayMs) / yesterdayMs) * 100).toFixed(0)
-        : null;
-
-    // CO2 estimate: ~0.42 kg CO2 per kWh (avg grid)
-    const monthCo2 = monthKwh * 0.42;
+    const yearMs = totalActiveMs(events, yearStart.getTime(), now);
 
     return {
-      todayMs,
+      weekMs,
       monthMs,
-      totalMs,
-      todayKwh,
-      monthKwh,
-      totalKwhAll,
-      todayCost,
-      monthCost,
-      projectedMonthCost,
-      trendVsYesterday,
-      monthCo2,
+      yearMs,
     };
-  }, [events, settings]);
+  }, [events]);
 
   const liveSession = currentSessionStart ? Date.now() - currentSessionStart : 0;
 
@@ -145,9 +120,9 @@ const Index = () => {
 
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="hidden sm:flex items-center gap-2 rounded-xl bg-surface-2/80 backdrop-blur border border-border px-3 py-2">
-              <Wifi className="h-3.5 w-3.5 text-primary" />
+              <Wifi className={`h-3.5 w-3.5 ${isConnected ? "text-primary" : "text-muted-foreground"}`} />
               <span className="font-mono text-xs text-muted-foreground">
-                Arduino · <span className="text-primary">Conectado</span>
+                Arduino · <span className={isConnected ? "text-primary" : "text-muted-foreground"}>{isConnected ? "Conectado" : "Desconectado"}</span>
               </span>
             </div>
             <button
@@ -229,74 +204,42 @@ const Index = () => {
 
             <button
               onClick={toggle}
+              disabled={!isConnected}
               className={`relative mt-5 w-full rounded-2xl py-3.5 font-semibold text-sm tracking-wide transition-all duration-500 ${
-                isOn
+                !isConnected
+                  ? "bg-surface-3 text-muted-foreground cursor-not-allowed opacity-50"
+                  : isOn
                   ? "bg-surface-2 border border-border text-foreground hover:bg-surface-3"
                   : "bg-gradient-primary text-primary-foreground shadow-glow hover:shadow-elevated"
               }`}
             >
-              {isOn ? "Apagar foco" : "Encender foco"}
+              {!isConnected ? "Desconectado" : isOn ? "Apagar foco" : "Encender foco"}
             </button>
           </div>
 
           {/* Right column: brightness + quick actions + stats */}
           <div className="lg:col-span-3 space-y-5 sm:space-y-6">
-            <div className="grid sm:grid-cols-2 gap-5">
-              <BrightnessSlider
-                value={settings.brightness}
-                onChange={handleBrightnessChange}
-              />
-              <QuickActions
-                isOn={isOn}
-                onAction={handleQuickAction}
-                currentBrightness={settings.brightness}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 sm:gap-5">
+            <div className="grid sm:grid-cols-3 gap-4 sm:gap-5">
               <StatCard
-                label="Uso hoy"
-                value={formatDuration(stats.todayMs).split(" ")[0]}
-                unit={formatDuration(stats.todayMs).split(" ")[1] || ""}
+                label="Esta Semana"
+                value={formatDuration(stats.weekMs).split(" ")[0]}
+                unit={formatDuration(stats.weekMs).split(" ")[1] || ""}
                 icon={<Clock className="h-5 w-5" />}
-                trend={
-                  stats.trendVsYesterday
-                    ? {
-                        value: `${Math.abs(Number(stats.trendVsYesterday))}%`,
-                        positive: Number(stats.trendVsYesterday) <= 0,
-                      }
-                    : undefined
-                }
               />
               <StatCard
-                label="Energía hoy"
-                value={stats.todayKwh.toFixed(3)}
-                unit="kWh"
-                icon={<Zap className="h-5 w-5" />}
+                label="Este Mes"
+                value={formatDuration(stats.monthMs).split(" ")[0]}
+                unit={formatDuration(stats.monthMs).split(" ")[1] || ""}
+                icon={<Clock className="h-5 w-5" />}
               />
               <StatCard
-                label="Costo hoy"
-                value={`$${stats.todayCost.toFixed(2)}`}
-                icon={<DollarSign className="h-5 w-5" />}
-              />
-              <StatCard
-                label="CO₂ del mes"
-                value={stats.monthCo2.toFixed(2)}
-                unit="kg"
-                icon={<Leaf className="h-5 w-5" />}
-                accent="accent"
+                label="Este Año"
+                value={formatDuration(stats.yearMs).split(" ")[0]}
+                unit={formatDuration(stats.yearMs).split(" ")[1] || ""}
+                icon={<Clock className="h-5 w-5" />}
               />
             </div>
           </div>
-        </section>
-
-        {/* Budget alert */}
-        <section className="mb-6 sm:mb-8 animate-fade-in">
-          <BudgetAlert
-            monthCost={stats.monthCost}
-            budget={settings.monthlyBudget}
-            projectedCost={stats.projectedMonthCost}
-          />
         </section>
 
         {/* Charts + Timeline */}
@@ -310,60 +253,6 @@ const Index = () => {
           </div>
           <div className="animate-fade-in">
             <HistoryTimeline events={events} />
-          </div>
-        </section>
-
-        {/* Resumen mensual completo */}
-        <section className="mt-6 sm:mt-8 glass-card rounded-2xl p-5 sm:p-6 relative overflow-hidden animate-fade-in">
-          <div className="absolute inset-0 bg-gradient-primary opacity-[0.03]" />
-          <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                Resumen del mes en curso
-              </div>
-              <div className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-3">
-                <div>
-                  <div className="font-display text-2xl font-semibold">
-                    {stats.monthKwh.toFixed(2)}
-                    <span className="font-mono text-xs text-muted-foreground ml-1">kWh</span>
-                  </div>
-                  <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Consumo</div>
-                </div>
-                <div className="h-8 w-px bg-border hidden sm:block" />
-                <div>
-                  <div className="font-display text-2xl font-semibold text-gradient">
-                    ${stats.monthCost.toFixed(2)}
-                  </div>
-                  <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Gasto</div>
-                </div>
-                <div className="h-8 w-px bg-border hidden sm:block" />
-                <div>
-                  <div className="font-display text-2xl font-semibold">
-                    {(stats.monthMs / 3600000).toFixed(0)}
-                    <span className="font-mono text-xs text-muted-foreground ml-1">h</span>
-                  </div>
-                  <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Tiempo</div>
-                </div>
-                <div className="h-8 w-px bg-border hidden sm:block" />
-                <div>
-                  <div className="font-display text-2xl font-semibold">
-                    {stats.monthCo2.toFixed(1)}
-                    <span className="font-mono text-xs text-muted-foreground ml-1">kg CO₂</span>
-                  </div>
-                  <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Huella</div>
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={() => exportToCsv(events, settings.wattage)}
-              className="sm:hidden inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-2 px-4 py-2 text-sm font-medium hover:border-primary/40 transition-all"
-            >
-              <Download className="h-4 w-4 text-primary" />
-              Exportar CSV
-            </button>
-            <div className="hidden sm:flex h-14 w-14 rounded-2xl bg-primary/10 items-center justify-center border border-primary/20 shrink-0">
-              <Activity className="h-6 w-6 text-primary" />
-            </div>
           </div>
         </section>
 
